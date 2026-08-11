@@ -1,0 +1,4 @@
+enum AITier {
+  free,
+  paid,
+}
