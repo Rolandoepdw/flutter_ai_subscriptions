@@ -11,21 +11,59 @@ class ProviderDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AIConfigCubit, AIConfigState>(
+    return BlocConsumer<AIConfigCubit, AIConfigState>(
+      listener: (context, state) {
+        if (state.successMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.successMessage!), backgroundColor: Colors.green),
+          );
+          context.read<AIConfigCubit>().clearMessages();
+        }
+        if (state.errorMessage != null && state.status != AIConfigStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.errorMessage!), backgroundColor: Colors.red),
+          );
+          context.read<AIConfigCubit>().clearMessages();
+        }
+      },
       builder: (context, state) {
         final provider = state.providers.firstWhere((p) => p.id == providerId);
         final selectedModelId = state.selectedModelIds[providerId];
         final pool = state.keyPools[providerId];
+        final models = state.providerModels[providerId] ?? [];
         final isSelectedProvider = state.selectedProviderId == providerId;
+        final isDiscovering = state.status == AIConfigStatus.discoveryInProgress;
 
         return Scaffold(
           appBar: AppBar(
+            backgroundColor: Theme.of(context).primaryColor,
+            titleTextStyle: const TextStyle(color: Colors.white, fontSize: 24),
+            actionsPadding: const EdgeInsets.all(8),
+            iconTheme: const IconThemeData(color: Colors.white),
             title: Text(provider.name),
             actions: [
+              if (isDiscovering)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => context.read<AIConfigCubit>().refreshModels(providerId),
+                ),
               if (!isSelectedProvider)
-                TextButton(
+                const SizedBox(width: 8),
+              if (!isSelectedProvider)
+                IconButton(
+                  icon: const Icon(Icons.check_circle),
                   onPressed: () => context.read<AIConfigCubit>().selectProvider(providerId),
-                  child: const Text('Activar', style: TextStyle(color: Colors.white)),
                 ),
             ],
           ),
@@ -35,17 +73,55 @@ class ProviderDetailScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Seleccionar Modelo',
+                  'Select Model',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                ...provider.models.map((model) {
+                if (models.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Column(
+                      children: [
+                        const Text('Add a key to discover available models.'),
+                        if (isDiscovering)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8.0),
+                            child: LinearProgressIndicator(),
+                          ),
+                      ],
+                    ),
+                  )
+                else
+                  const SizedBox(height: 8),
+                ...models.map((model) {
+                  final tokens = model.contextTokens != null 
+                    ? (model.contextTokens! >= 1000 
+                        ? '${(model.contextTokens! / 1000).toStringAsFixed(0)}K' 
+                        : '${model.contextTokens}')
+                    : '---';
+
                   return RadioListTile<String>(
-                    title: Text(model.name),
-                    subtitle: Text(model.tier == AITier.free ? 'Gratuito' : 'De pago'),
-                    secondary: model.tier == AITier.free 
-                        ? const Icon(Icons.money_off, color: Colors.green)
-                        : const Icon(Icons.attach_money, color: Colors.orange),
+                    title: Text(model.name, overflow: TextOverflow.ellipsis),
+                    subtitle: Row(
+                      children: [
+                        Text(model.tier == AITier.free ? 'Free' : 'Paid'),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            tokens,
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        model.tier == AITier.free 
+                            ? const Icon(Icons.money_off, color: Colors.green, size: 16)
+                            : const Icon(Icons.attach_money, color: Colors.orange, size: 16),
+                      ],
+                    ),
                     value: model.id,
                     groupValue: selectedModelId,
                     onChanged: (val) {
@@ -60,19 +136,19 @@ class ProviderDetailScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Pool de Claves API',
+                      'API Key Pool',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     IconButton(
                       icon: const Icon(Icons.add),
-                      onPressed: () => _showAddKeyDialog(context, providerId),
+                      onPressed: isDiscovering ? null : () => _showAddKeyDialog(context, providerId),
                     ),
                   ],
                 ),
                 if (pool == null || pool.keys.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16.0),
-                    child: Text('No hay claves configuradas para este proveedor.'),
+                    child: Text('No keys configured for this provider.'),
                   )
                 else
                   ListView.builder(
@@ -89,10 +165,7 @@ class ProviderDetailScreen extends StatelessWidget {
                           color: key.isExhausted ? Colors.red : (isActive ? Colors.blue : Colors.grey),
                         ),
                         title: Text('••••${key.value.substring(key.value.length > 4 ? key.value.length - 4 : 0)}'),
-                        subtitle: Text(key.isExhausted ? 'Agotada' : (isActive ? 'Activa' : 'En reserva')),
-                        trailing: isActive && isSelectedProvider 
-                          ? const Icon(Icons.play_arrow, color: Colors.blue)
-                          : null,
+                        subtitle: Text(key.isExhausted ? 'Exhausted' : (isActive ? 'Active' : 'Standby')),
                       );
                     },
                   ),
@@ -109,25 +182,25 @@ class ProviderDetailScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Añadir Clave API'),
+        title: const Text('Add API Key'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(hintText: 'Pega aquí tu clave'),
+          decoration: const InputDecoration(hintText: 'Paste your key here'),
           autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
                 context.read<AIConfigCubit>().addKey(providerId, controller.text);
                 Navigator.pop(context);
               }
             },
-            child: const Text('Añadir'),
+            child: const Text('Add'),
           ),
         ],
       ),

@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_ai_subscriptions/features/ai_config/data/mock_providers.dart';
-import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_provider.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/data/provider_definitions.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_model.dart';
 import 'package:flutter_ai_subscriptions/features/ai_config/services/ai_config_manager.dart';
 import 'ai_config_state.dart';
 
@@ -12,59 +12,90 @@ class AIConfigCubit extends Cubit<AIConfigState> {
   Future<void> loadConfig() async {
     emit(state.copyWith(status: AIConfigStatus.loading));
     try {
-      final providers = MockProviders.providers;
-      final selectedProviderId = _manager.selectedProviderId;
-      
-      final Map<String, String> modelIds = {};
-      final Map<String, dynamic> pools = {}; // We'll map them properly below
-
-      for (final p in providers) {
-        modelIds[p.id] = _manager.getSelectedModelId(p.id) ?? p.models.first.id;
-      }
-
-      _updateState(providers: providers, selectedProviderId: selectedProviderId);
+      final providers = ProviderDefinitions.definitions;
+      _updateState(providers: providers);
     } catch (e) {
-      emit(state.copyWith(status: AIConfigStatus.error, errorMessage: e.toString()));
+      emit(state.copyWith(
+        status: AIConfigStatus.error,
+        errorMessage: 'Error loading configuration: $e',
+      ));
     }
   }
 
-  void _updateState({List<AIProvider>? providers, String? selectedProviderId}) {
+  void _updateState({List<ProviderDefinition>? providers, AIConfigStatus? status, String? successMessage, String? errorMessage}) {
     final currentProviders = providers ?? state.providers;
     final Map<String, String> modelIds = {};
+    final Map<String, List<AIModel>> providerModels = {};
 
     for (final p in currentProviders) {
-      modelIds[p.id] = _manager.getSelectedModelId(p.id) ?? p.models.first.id;
+      final selectedModel = _manager.getSelectedModelId(p.id);
+      if (selectedModel != null) {
+        modelIds[p.id] = selectedModel;
+      }
+      providerModels[p.id] = _manager.getModels(p.id);
     }
 
     emit(state.copyWith(
       providers: currentProviders,
-      selectedProviderId: selectedProviderId ?? _manager.selectedProviderId,
+      selectedProviderId: _manager.selectedProviderId,
       selectedModelIds: modelIds,
+      providerModels: providerModels,
       keyPools: {
         for (final p in currentProviders)
           if (_manager.getPool(p.id) != null) p.id: _manager.getPool(p.id)!
       },
-      status: AIConfigStatus.ready,
+      status: status ?? AIConfigStatus.ready,
+      successMessage: successMessage,
+      errorMessage: errorMessage,
     ));
   }
 
   Future<void> selectProvider(String providerId) async {
     await _manager.selectProvider(providerId);
-    _updateState();
+    _updateState(successMessage: 'Provider updated');
   }
 
   Future<void> selectModel(String providerId, String modelId) async {
     await _manager.selectModel(providerId, modelId);
-    _updateState();
+    _updateState(successMessage: 'Model selected');
   }
 
   Future<void> addKey(String providerId, String key) async {
-    await _manager.addKey(providerId, key);
-    _updateState();
+    emit(state.copyWith(status: AIConfigStatus.discoveryInProgress));
+    try {
+      await _manager.addKey(providerId, key);
+      final models = _manager.getModels(providerId);
+      if (models.isNotEmpty) {
+        _updateState(successMessage: 'Key added and ${models.length} models discovered');
+      } else {
+        _updateState(errorMessage: 'Key added, but no models were found. Check your key.');
+      }
+    } catch (e) {
+      _updateState(errorMessage: 'Error adding key: $e');
+    }
   }
 
   Future<void> reportExhausted() async {
     await _manager.reportKeyExhausted();
-    _updateState();
+    _updateState(errorMessage: 'Key exhausted, rotating...');
+  }
+
+  Future<void> refreshModels(String providerId) async {
+    emit(state.copyWith(status: AIConfigStatus.discoveryInProgress));
+    try {
+      await _manager.refreshModels(providerId);
+      final models = _manager.getModels(providerId);
+      if (models.isNotEmpty) {
+        _updateState(successMessage: 'Sync completed: ${models.length} models');
+      } else {
+        _updateState(errorMessage: 'Sync finished with no new models');
+      }
+    } catch (e) {
+      _updateState(errorMessage: 'Sync error: $e');
+    }
+  }
+
+  void clearMessages() {
+    emit(state.copyWith(successMessage: null, errorMessage: null));
   }
 }

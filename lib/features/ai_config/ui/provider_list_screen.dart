@@ -11,7 +11,9 @@ class ProviderListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configuración de IA'),
+        backgroundColor: Theme.of(context).primaryColor,
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 24),
+        title: const Text('AI Configuration'),
       ),
       body: BlocBuilder<AIConfigCubit, AIConfigState>(
         builder: (context, state) {
@@ -30,36 +32,16 @@ class ProviderListScreen extends StatelessWidget {
               final isSelected = state.selectedProviderId == provider.id;
               final pool = state.keyPools[provider.id];
               final keyCount = pool?.keys.length ?? 0;
+              final models = state.providerModels[provider.id] ?? [];
 
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Colors.grey[200],
-                  child: provider.iconPath.endsWith('.png') 
-                      ? const Icon(Icons.psychology) // Fallback for icons not in assets yet
-                      : Text(provider.name[0]),
+                  child: const Icon(Icons.psychology),
                 ),
                 title: Text(provider.name),
-                subtitle: Text('$keyCount claves configuradas'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (provider.hasFreeModels)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'Free',
-                          style: TextStyle(color: Colors.green, fontSize: 12),
-                        ),
-                      ),
-                    const SizedBox(width: 8),
-                    if (isSelected)
-                      const Icon(Icons.check_circle, color: Colors.blue),
-                  ],
-                ),
+                subtitle: Text('$keyCount keys • ${models.length} models'),
+                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.blue) : null,
                 onTap: () {
                   Navigator.push(
                     context,

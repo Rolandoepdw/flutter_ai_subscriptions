@@ -18,6 +18,7 @@ class MyApp extends StatelessWidget {
     return BlocProvider(
       create: (context) => sl<AIConfigCubit>()..loadConfig(),
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'AI Subscriptions',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
