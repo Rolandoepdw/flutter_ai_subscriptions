@@ -28,8 +28,11 @@ class AIConfigManager {
 
   Future<void> init() async {
     developer.log('Initializing AIConfigManager...', name: 'AIConfigManager');
+    
+    // 1. Load active provider
     _selectedProviderId = await _storage.loadSelectedProvider();
     
+    // 2. Load pools and cached models for ALL providers
     for (final def in ProviderDefinitions.definitions) {
       final pool = await _storage.loadKeyPool(def.id);
       if (pool != null) {
@@ -46,6 +49,21 @@ class AIConfigManager {
         _selectedModelIds[def.id] = modelId;
       }
     }
+
+    // 3. Fallback logic: Ensure we have a provider if possible
+    if (_selectedProviderId == null && _pools.isNotEmpty) {
+      _selectedProviderId = _pools.keys.first;
+      await _storage.saveSelectedProvider(_selectedProviderId!);
+    }
+
+    // 4. Background refresh of models for the active provider if cache is empty
+    if (_selectedProviderId != null && (_cachedModels[_selectedProviderId] ?? []).isEmpty) {
+      // Don't await this to keep init() fast
+      refreshModels(_selectedProviderId!).catchError((e) {
+        developer.log('Initial background refresh failed for $_selectedProviderId: $e', name: 'AIConfigManager');
+      });
+    }
+
     developer.log('Initialization complete. Active Provider: $_selectedProviderId', name: 'AIConfigManager');
   }
 
@@ -58,13 +76,25 @@ class AIConfigManager {
     
     if (pool == null || modelId == null) return null;
     
-    final activeKey = pool.activeKey;
-    if (activeKey == null || activeKey.isExhausted) return null;
+    // Get the active key. If it's exhausted, try to rotate.
+    var activeKey = pool.activeKey;
+    if (activeKey == null || activeKey.isExhausted) {
+      // Try to find any non-exhausted key in the pool
+      final availableKeyIndex = pool.keys.indexWhere((k) => !k.isExhausted);
+      if (availableKeyIndex != -1) {
+        final updatedPool = pool.copyWith(activeIndex: availableKeyIndex);
+        _pools[providerId] = updatedPool;
+        _storage.saveKeyPool(updatedPool);
+        activeKey = updatedPool.activeKey;
+      } else {
+        return null; // All keys truly exhausted
+      }
+    }
 
     return AIActiveCredentials(
       providerId: providerId,
       modelId: modelId,
-      apiKey: activeKey.value,
+      apiKey: activeKey!.value,
     );
   }
 
@@ -104,6 +134,12 @@ class AIConfigManager {
     developer.log('Adding key to provider: $providerId', name: 'AIConfigManager');
     final pool = _pools[providerId] ?? APIKeyPool(providerId: providerId, keys: []);
     
+    // Check if key already exists to avoid duplicates
+    if (pool.keys.any((k) => k.value == keyValue)) {
+      developer.log('Key already exists in pool.', name: 'AIConfigManager');
+      return;
+    }
+
     final newKey = APIKey(
       value: keyValue,
       createdAt: DateTime.now(),
@@ -116,8 +152,31 @@ class AIConfigManager {
     await _storage.saveKeyPool(updatedPool);
     developer.log('Key saved successfully.', name: 'AIConfigManager');
 
-    // After adding a key, try to refresh models
+    // Automatically select this provider if it's the first one
+    if (_selectedProviderId == null) {
+      await selectProvider(providerId);
+    }
+
     await refreshModels(providerId);
+  }
+
+  Future<void> removeKey(String providerId, String keyValue) async {
+    final pool = _pools[providerId];
+    if (pool == null) return;
+
+    final updatedKeys = pool.keys.where((k) => k.value != keyValue).toList();
+    
+    // Adjust activeIndex if necessary
+    int newActiveIndex = pool.activeIndex;
+    if (newActiveIndex >= updatedKeys.length) {
+      newActiveIndex = updatedKeys.isEmpty ? 0 : updatedKeys.length - 1;
+    }
+
+    final updatedPool = pool.copyWith(keys: updatedKeys, activeIndex: newActiveIndex);
+    _pools[providerId] = updatedPool;
+    await _storage.saveKeyPool(updatedPool);
+    
+    developer.log('Key removed from $providerId.', name: 'AIConfigManager');
   }
 
   Future<void> refreshModels(String providerId) async {

@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_ai_subscriptions/features/ai_config/data/provider_definitions.dart';
-import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_model.dart';
-import 'package:flutter_ai_subscriptions/features/ai_config/services/ai_config_manager.dart';
+import '../data/provider_definitions.dart';
+import '../models/ai_model.dart';
+import '../services/ai_config_manager.dart';
 import 'ai_config_state.dart';
 
 class AIConfigCubit extends Cubit<AIConfigState> {
@@ -22,7 +22,12 @@ class AIConfigCubit extends Cubit<AIConfigState> {
     }
   }
 
-  void _updateState({List<ProviderDefinition>? providers, AIConfigStatus? status, String? successMessage, String? errorMessage}) {
+  void _updateState({
+    List<ProviderDefinition>? providers, 
+    AIConfigStatus? status, 
+    String? successMessage, 
+    String? errorMessage,
+  }) {
     final currentProviders = providers ?? state.providers;
     final Map<String, String> modelIds = {};
     final Map<String, List<AIModel>> providerModels = {};
@@ -68,11 +73,16 @@ class AIConfigCubit extends Cubit<AIConfigState> {
       if (models.isNotEmpty) {
         _updateState(successMessage: 'Key added and ${models.length} models discovered');
       } else {
-        _updateState(errorMessage: 'Key added, but no models were found. Check your key.');
+        _updateState(errorMessage: 'Key added, but no models found. Check your key.');
       }
     } catch (e) {
       _updateState(errorMessage: 'Error adding key: $e');
     }
+  }
+
+  Future<void> removeKey(String providerId, String key) async {
+    await _manager.removeKey(providerId, key);
+    _updateState(successMessage: 'Key removed');
   }
 
   Future<void> reportExhausted() async {
@@ -93,6 +103,14 @@ class AIConfigCubit extends Cubit<AIConfigState> {
     } catch (e) {
       _updateState(errorMessage: 'Sync error: $e');
     }
+  }
+
+  void updateSearchQuery(String query) {
+    emit(state.copyWith(searchQuery: query));
+  }
+
+  void toggleOnlyFree(bool value) {
+    emit(state.copyWith(onlyFree: value));
   }
 
   void clearMessages() {

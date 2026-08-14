@@ -14,6 +14,10 @@ class AIConfigState extends Equatable {
   final AIConfigStatus status;
   final String? errorMessage;
   final String? successMessage;
+  
+  // Search and Filtering
+  final String searchQuery;
+  final bool onlyFree;
 
   const AIConfigState({
     this.providers = const [],
@@ -24,7 +28,19 @@ class AIConfigState extends Equatable {
     this.status = AIConfigStatus.initial,
     this.errorMessage,
     this.successMessage,
+    this.searchQuery = '',
+    this.onlyFree = false,
   });
+
+  List<AIModel> getFilteredModels(String providerId) {
+    final allModels = providerModels[providerId] ?? [];
+    return allModels.where((model) {
+      final matchesSearch = model.name.toLowerCase().contains(searchQuery.toLowerCase()) || 
+                           model.id.toLowerCase().contains(searchQuery.toLowerCase());
+      final matchesFree = !onlyFree || model.tier.name == 'free';
+      return matchesSearch && matchesFree;
+    }).toList();
+  }
 
   AIConfigState copyWith({
     List<ProviderDefinition>? providers,
@@ -35,6 +51,8 @@ class AIConfigState extends Equatable {
     AIConfigStatus? status,
     String? errorMessage,
     String? successMessage,
+    String? searchQuery,
+    bool? onlyFree,
   }) {
     return AIConfigState(
       providers: providers ?? this.providers,
@@ -45,6 +63,8 @@ class AIConfigState extends Equatable {
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       successMessage: successMessage ?? this.successMessage,
+      searchQuery: searchQuery ?? this.searchQuery,
+      onlyFree: onlyFree ?? this.onlyFree,
     );
   }
 
@@ -58,5 +78,7 @@ class AIConfigState extends Equatable {
         status,
         errorMessage,
         successMessage,
+        searchQuery,
+        onlyFree,
       ];
 }

@@ -12,8 +12,9 @@ class ProviderListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).primaryColor,
-        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 24),
-        title: const Text('AI Configuration'),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('AI Providers'),
       ),
       body: BlocBuilder<AIConfigCubit, AIConfigState>(
         builder: (context, state) {
@@ -22,11 +23,16 @@ class ProviderListScreen extends StatelessWidget {
           }
 
           if (state.status == AIConfigStatus.error) {
-            return Center(child: Text('Error: ${state.errorMessage}'));
+            return Center(child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Text('Error: ${state.errorMessage}', textAlign: TextAlign.center),
+            ));
           }
 
-          return ListView.builder(
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: state.providers.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final provider = state.providers[index];
               final isSelected = state.selectedProviderId == provider.id;
@@ -36,12 +42,12 @@ class ProviderListScreen extends StatelessWidget {
 
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: Colors.grey[200],
-                  child: const Icon(Icons.psychology),
+                  backgroundColor: isSelected ? Colors.blue.shade100 : Colors.grey[200],
+                  child: Icon(Icons.psychology, color: isSelected ? Colors.blue : Colors.grey),
                 ),
-                title: Text(provider.name),
+                title: Text(provider.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                 subtitle: Text('$keyCount keys • ${models.length} models'),
-                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.blue) : null,
+                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.blue) : const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(
                     context,

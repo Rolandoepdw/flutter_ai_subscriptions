@@ -6,12 +6,16 @@ class AIModel extends Equatable {
   final String name;
   final AITier tier;
   final int? contextTokens;
+  final double? inputPrice; // Per 1M tokens
+  final double? outputPrice; // Per 1M tokens
 
   const AIModel({
     required this.id,
     required this.name,
     required this.tier,
     this.contextTokens,
+    this.inputPrice,
+    this.outputPrice,
   });
 
   Map<String, dynamic> toJson() {
@@ -20,6 +24,8 @@ class AIModel extends Equatable {
       'name': name,
       'tier': tier.name,
       'contextTokens': contextTokens,
+      'inputPrice': inputPrice,
+      'outputPrice': outputPrice,
     };
   }
 
@@ -29,9 +35,11 @@ class AIModel extends Equatable {
       name: json['name'],
       tier: AITier.values.byName(json['tier']),
       contextTokens: json['contextTokens'],
+      inputPrice: (json['inputPrice'] as num?)?.toDouble(),
+      outputPrice: (json['outputPrice'] as num?)?.toDouble(),
     );
   }
 
   @override
-  List<Object?> get props => [id, name, tier, contextTokens];
+  List<Object?> get props => [id, name, tier, contextTokens, inputPrice, outputPrice];
 }
