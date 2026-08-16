@@ -34,7 +34,31 @@ class AIConfigState extends Equatable {
 
   List<AIModel> getFilteredModels(String providerId) {
     final allModels = providerModels[providerId] ?? [];
-    return allModels.where((model) {
+    return _applyFilters(allModels);
+  }
+
+  /// Returns a map of Provider Name to its filtered models, only for providers with keys.
+  Map<String, List<AIModel>> getGlobalFilteredModels() {
+    final Map<String, List<AIModel>> globalModels = {};
+    
+    for (final provider in providers) {
+      // Only show providers that have at least one key configured
+      final pool = keyPools[provider.id];
+      if (pool == null || pool.keys.isEmpty) continue;
+
+      final models = providerModels[provider.id] ?? [];
+      final filtered = _applyFilters(models);
+      
+      if (filtered.isNotEmpty) {
+        globalModels[provider.name] = filtered;
+      }
+    }
+    
+    return globalModels;
+  }
+
+  List<AIModel> _applyFilters(List<AIModel> models) {
+    return models.where((model) {
       final matchesSearch = model.name.toLowerCase().contains(searchQuery.toLowerCase()) || 
                            model.id.toLowerCase().contains(searchQuery.toLowerCase());
       final matchesFree = !onlyFree || model.tier.name == 'free';

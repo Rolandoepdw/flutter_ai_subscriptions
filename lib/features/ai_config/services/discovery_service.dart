@@ -59,18 +59,22 @@ class DiscoveryService {
     
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      final List? models = data['data'];
+      final List? rawModels = data['data'];
       
-      if (models == null) return [];
+      if (rawModels == null) return [];
 
-      developer.log('OpenRouter: Processing ${models.length} models', name: 'DiscoveryService');
+      final List<AIModel> models = [];
+      final Set<String> seenIds = {};
 
-      return models.map((m) {
+      for (final m in rawModels) {
         final id = m['id'] as String;
+        if (!seenIds.add(id)) continue;
+
         final name = m['name'] as String? ?? id;
         final contextTokens = m['context_length'] as int?;
-        
         final pricing = m['pricing'];
+        final architecture = m['architecture'] as Map<String, dynamic>?;
+        
         bool isFree = id.contains(':free');
         double? inputPrice;
         double? outputPrice;
@@ -78,25 +82,31 @@ class DiscoveryService {
         if (pricing != null) {
           final promptVal = _parsePrice(pricing['prompt']);
           final completionVal = _parsePrice(pricing['completion']);
-          
           if (promptVal == 0 && completionVal == 0) {
             isFree = true;
           } else {
-            // OpenRouter provides price per 1 token. Convert to cost per 1M tokens for display.
             inputPrice = promptVal * 1000000;
             outputPrice = completionVal * 1000000;
           }
         }
 
-        return AIModel(
+        final bool hasVision = architecture?['modality']?.toString().contains('image') ?? false;
+        final bool hasTools = architecture?['tool_use'] == true;
+        final bool hasReasoning = id.contains('reasoner') || id.contains('o1') || id.contains('r1');
+
+        models.add(AIModel(
           id: id,
           name: name,
           tier: isFree ? AITier.free : AITier.paid,
           contextTokens: contextTokens,
           inputPrice: inputPrice,
           outputPrice: outputPrice,
-        );
-      }).toList();
+          hasVision: hasVision,
+          hasTools: hasTools,
+          hasReasoning: hasReasoning,
+        ));
+      }
+      return models;
     } else {
       throw Exception('OpenRouter error (${response.statusCode}): ${response.body}');
     }
@@ -118,9 +128,8 @@ class DiscoveryService {
         final id = (m['name'] as String).replaceFirst('models/', '');
         final name = m['displayName'] as String? ?? id;
         final contextTokens = m['inputTokenLimit'] as int?;
+        final supportedMethods = m['supportedGenerationMethods'] as List?;
         
-        // Google AI Studio models are free but have limits.
-        // We mark them as free to show "Free" instead of $0.00
         return AIModel(
           id: id,
           name: name,
@@ -128,6 +137,9 @@ class DiscoveryService {
           contextTokens: contextTokens,
           inputPrice: 0,
           outputPrice: 0,
+          hasVision: id.contains('flash') || id.contains('pro'), // Most Gemini models have vision
+          hasTools: supportedMethods?.contains('generateContent') ?? false, // Basic tool use is common
+          hasReasoning: id.contains('thinking') || id.contains('reasoning'),
         );
       }).toList();
     } else {
@@ -152,14 +164,12 @@ class DiscoveryService {
       if (models == null) return [];
       return models.map((m) {
         final id = m['id'] as String;
-        // Anthropic doesn't provide pricing in this API.
-        // We'll mark as paid and maybe add hardcoded estimates later if needed.
         return AIModel(
           id: id,
           name: m['display_name'] ?? id,
           tier: AITier.paid,
-          inputPrice: 0.0, // Placeholder
-          outputPrice: 0.0, // Placeholder
+          hasVision: id.contains('claude-3'), // Claude 3+ supports vision
+          hasTools: true, // Claude is great at tools
         );
       }).toList();
     }
@@ -183,8 +193,7 @@ class DiscoveryService {
           id: id, 
           name: id, 
           tier: AITier.paid,
-          inputPrice: 0.0,
-          outputPrice: 0.0,
+          hasReasoning: id.contains('reasoner') || id.contains('r1'),
         );
       }).toList();
     }

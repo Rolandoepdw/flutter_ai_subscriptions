@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/injection/service_locator.dart';
 import 'features/ai_config/cubit/ai_config_cubit.dart';
-import 'features/ai_config/ui/provider_list_screen.dart';
+import 'features/chat/ui/chat_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const ProviderListScreen(),
+        home: const ChatScreen(),
       ),
     );
   }

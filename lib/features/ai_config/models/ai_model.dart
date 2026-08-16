@@ -8,6 +8,11 @@ class AIModel extends Equatable {
   final int? contextTokens;
   final double? inputPrice; // Per 1M tokens
   final double? outputPrice; // Per 1M tokens
+  
+  // Capabilities
+  final bool hasVision;
+  final bool hasTools;
+  final bool hasReasoning;
 
   const AIModel({
     required this.id,
@@ -16,6 +21,9 @@ class AIModel extends Equatable {
     this.contextTokens,
     this.inputPrice,
     this.outputPrice,
+    this.hasVision = false,
+    this.hasTools = false,
+    this.hasReasoning = false,
   });
 
   Map<String, dynamic> toJson() {
@@ -26,6 +34,9 @@ class AIModel extends Equatable {
       'contextTokens': contextTokens,
       'inputPrice': inputPrice,
       'outputPrice': outputPrice,
+      'hasVision': hasVision,
+      'hasTools': hasTools,
+      'hasReasoning': hasReasoning,
     };
   }
 
@@ -37,9 +48,15 @@ class AIModel extends Equatable {
       contextTokens: json['contextTokens'],
       inputPrice: (json['inputPrice'] as num?)?.toDouble(),
       outputPrice: (json['outputPrice'] as num?)?.toDouble(),
+      hasVision: json['hasVision'] ?? false,
+      hasTools: json['hasTools'] ?? false,
+      hasReasoning: json['hasReasoning'] ?? false,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, tier, contextTokens, inputPrice, outputPrice];
+  List<Object?> get props => [
+    id, name, tier, contextTokens, inputPrice, outputPrice, 
+    hasVision, hasTools, hasReasoning
+  ];
 }

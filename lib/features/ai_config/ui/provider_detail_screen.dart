@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/ui/widgets/model_selection_tile.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../cubit/ai_config_cubit.dart';
-import '../cubit/ai_config_state.dart';
-import '../models/ai_tier.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/cubit/ai_config_cubit.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/cubit/ai_config_state.dart';
 
 class ProviderDetailScreen extends StatefulWidget {
   final String providerId;
@@ -87,7 +87,6 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
           ),
           body: Column(
             children: [
-              // Search and Filter Header
               Container(
                 padding: const EdgeInsets.all(12.0),
                 decoration: BoxDecoration(
@@ -130,119 +129,81 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
                 ),
               ),
               Expanded(
-                child: SingleChildScrollView(
+                child: ListView.builder(
                   padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Select Model',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      if (filteredModels.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48.0),
-                          child: Center(child: Text('No models found matching your search.', style: TextStyle(color: Colors.grey))),
-                        )
-                      else
-                        const SizedBox(height: 12),
-                      ...filteredModels.map((model) {
-                        final tokensStr = model.contextTokens != null 
-                          ? (model.contextTokens! >= 1000000 
-                              ? '${(model.contextTokens! / 1000000).toStringAsFixed(1)}M' 
-                              : (model.contextTokens! >= 1000 
-                                  ? '${(model.contextTokens! / 1000).toStringAsFixed(0)}K' 
-                                  : '${model.contextTokens}'))
-                          : '---';
-
-                        final inputPrice = model.inputPrice != null ? '\$${model.inputPrice!.toStringAsFixed(2)}' : '0.00';
-                        final outputPrice = model.outputPrice != null ? '\$${model.outputPrice!.toStringAsFixed(2)}' : '0.00';
-                        final costStr = model.tier == AITier.free ? 'Free' : 'In: $inputPrice | Out: $outputPrice / 1M';
-
-                        return RadioListTile<String>(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(model.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(costStr, style: TextStyle(fontSize: 11, color: model.tier == AITier.free ? Colors.green : Colors.orange.shade700)),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      '$tokensStr ctx',
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue),
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  if (model.tier == AITier.free)
-                                    const Icon(Icons.money_off, color: Colors.green, size: 14)
-                                  else
-                                    const Icon(Icons.attach_money, color: Colors.orange, size: 14),
-                                ],
-                              ),
-                            ],
-                          ),
-                          value: model.id,
-                          groupValue: selectedModelId,
-                          onChanged: (val) {
-                            if (val != null) {
-                              context.read<AIConfigCubit>().selectModel(widget.providerId, val);
-                            }
-                          },
-                        );
-                      }),
-                      const Divider(height: 48),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'API Key Pool',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
-                            onPressed: isDiscovering ? null : () => _showAddKeyDialog(context, widget.providerId),
-                          ),
-                        ],
-                      ),
-                      if (pool == null || pool.keys.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16.0),
-                          child: Text('No keys configured for this provider.', style: TextStyle(color: Colors.grey)),
-                        )
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: pool.keys.length,
-                          itemBuilder: (context, index) {
-                            final key = pool.keys[index];
-                            final isActive = pool.activeIndex == index;
-
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                key.isExhausted ? Icons.error_outline : Icons.vpn_key,
-                                color: key.isExhausted ? Colors.red : (isActive ? Colors.blue : Colors.grey),
-                              ),
-                              title: Text('••••${key.value.substring(key.value.length > 4 ? key.value.length - 4 : 0)}'),
-                              subtitle: Text(key.isExhausted ? 'Exhausted' : (isActive ? 'Active' : 'Standby')),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                                onPressed: () => context.read<AIConfigCubit>().removeKey(widget.providerId, key.value),
-                              ),
-                            );
-                          },
+                  itemCount: filteredModels.length + 3,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 12.0),
+                        child: Text(
+                          'Select Model',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                    ],
-                  ),
+                      );
+                    }
+                    
+                    if (index <= filteredModels.length) {
+                      final model = filteredModels[index - 1];
+                      return ModelSelectionTile(
+                        model: model,
+                        isSelected: model.id == selectedModelId,
+                        onTap: () => context.read<AIConfigCubit>().selectModel(widget.providerId, model.id),
+                      );
+                    }
+
+                    if (index == filteredModels.length + 1) {
+                      return const Divider(height: 48);
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'API Key Pool',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                              onPressed: isDiscovering ? null : () => _showAddKeyDialog(context, widget.providerId),
+                            ),
+                          ],
+                        ),
+                        if (pool == null || pool.keys.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16.0),
+                            child: Text('No keys configured for this provider.', style: TextStyle(color: Colors.grey)),
+                          )
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: pool.keys.length,
+                            itemBuilder: (context, poolIndex) {
+                              final key = pool.keys[poolIndex];
+                              final isActive = pool.activeIndex == poolIndex;
+
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  key.isExhausted ? Icons.error_outline : Icons.vpn_key,
+                                  color: key.isExhausted ? Colors.red : (isActive ? Colors.blue : Colors.grey),
+                                ),
+                                title: Text('••••${key.value.substring(key.value.length > 4 ? key.value.length - 4 : 0)}'),
+                                subtitle: Text(key.isExhausted ? 'Exhausted' : (isActive ? 'Active' : 'Standby')),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                  onPressed: () => context.read<AIConfigCubit>().removeKey(widget.providerId, key.value),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],

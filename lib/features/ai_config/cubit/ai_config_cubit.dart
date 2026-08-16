@@ -61,6 +61,11 @@ class AIConfigCubit extends Cubit<AIConfigState> {
   }
 
   Future<void> selectModel(String providerId, String modelId) async {
+    // If selecting a model from a different provider, automatically select that provider first
+    if (state.selectedProviderId != providerId) {
+      await _manager.selectProvider(providerId);
+    }
+
     await _manager.selectModel(providerId, modelId);
     _updateState(successMessage: 'Model selected');
   }
