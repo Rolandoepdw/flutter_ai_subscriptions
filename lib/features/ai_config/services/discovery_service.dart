@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
-import '../data/provider_definitions.dart';
-import '../models/ai_model.dart';
-import '../models/ai_tier.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/data/provider_definitions.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_model.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_tier.dart';
 
 class DiscoveryService {
   Map<String, String> _getCommonHeaders() {
@@ -74,6 +74,7 @@ class DiscoveryService {
         final contextTokens = m['context_length'] as int?;
         final pricing = m['pricing'];
         final architecture = m['architecture'] as Map<String, dynamic>?;
+        final description = m['description']?.toString().toLowerCase() ?? '';
         
         bool isFree = id.contains(':free');
         double? inputPrice;
@@ -90,9 +91,16 @@ class DiscoveryService {
           }
         }
 
+        // More aggressive reasoning detection
         final bool hasVision = architecture?['modality']?.toString().contains('image') ?? false;
         final bool hasTools = architecture?['tool_use'] == true;
-        final bool hasReasoning = id.contains('reasoner') || id.contains('o1') || id.contains('r1');
+        final bool hasReasoning = id.contains('reasoner') || 
+                                 id.contains('o1') || 
+                                 id.contains('r1') || 
+                                 name.toLowerCase().contains('reason') ||
+                                 description.contains('reasoning') ||
+                                 description.contains('thinking') ||
+                                 description.contains('chain of thought');
 
         models.add(AIModel(
           id: id,
@@ -129,6 +137,7 @@ class DiscoveryService {
         final name = m['displayName'] as String? ?? id;
         final contextTokens = m['inputTokenLimit'] as int?;
         final supportedMethods = m['supportedGenerationMethods'] as List?;
+        final description = m['description']?.toString().toLowerCase() ?? '';
         
         return AIModel(
           id: id,
@@ -137,9 +146,9 @@ class DiscoveryService {
           contextTokens: contextTokens,
           inputPrice: 0,
           outputPrice: 0,
-          hasVision: id.contains('flash') || id.contains('pro'), // Most Gemini models have vision
-          hasTools: supportedMethods?.contains('generateContent') ?? false, // Basic tool use is common
-          hasReasoning: id.contains('thinking') || id.contains('reasoning'),
+          hasVision: id.contains('flash') || id.contains('pro') || description.contains('multimodal'),
+          hasTools: supportedMethods?.contains('generateContent') ?? false,
+          hasReasoning: id.contains('thinking') || id.contains('reasoning') || description.contains('thinking'),
         );
       }).toList();
     } else {
@@ -168,8 +177,8 @@ class DiscoveryService {
           id: id,
           name: m['display_name'] ?? id,
           tier: AITier.paid,
-          hasVision: id.contains('claude-3'), // Claude 3+ supports vision
-          hasTools: true, // Claude is great at tools
+          hasVision: id.contains('claude-3'), 
+          hasTools: true,
         );
       }).toList();
     }
