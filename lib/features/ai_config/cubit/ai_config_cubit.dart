@@ -1,7 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../data/provider_definitions.dart';
-import '../models/ai_model.dart';
-import '../services/ai_config_manager.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/data/provider_definitions.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_model.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/custom_provider.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/services/ai_config_manager.dart';
 import 'ai_config_state.dart';
 
 class AIConfigCubit extends Cubit<AIConfigState> {
@@ -12,7 +13,7 @@ class AIConfigCubit extends Cubit<AIConfigState> {
   Future<void> loadConfig() async {
     emit(state.copyWith(status: AIConfigStatus.loading));
     try {
-      final providers = ProviderDefinitions.definitions;
+      final providers = await _manager.getAllProviders();
       _updateState(providers: providers);
     } catch (e) {
       emit(state.copyWith(
@@ -42,6 +43,7 @@ class AIConfigCubit extends Cubit<AIConfigState> {
 
     emit(state.copyWith(
       providers: currentProviders,
+      customProviders: _manager.customProviders,
       selectedProviderId: _manager.selectedProviderId,
       selectedModelIds: modelIds,
       providerModels: providerModels,
@@ -61,11 +63,9 @@ class AIConfigCubit extends Cubit<AIConfigState> {
   }
 
   Future<void> selectModel(String providerId, String modelId) async {
-    // If selecting a model from a different provider, automatically select that provider first
     if (state.selectedProviderId != providerId) {
       await _manager.selectProvider(providerId);
     }
-
     await _manager.selectModel(providerId, modelId);
     _updateState(successMessage: 'Model selected');
   }
@@ -74,12 +74,7 @@ class AIConfigCubit extends Cubit<AIConfigState> {
     emit(state.copyWith(status: AIConfigStatus.discoveryInProgress));
     try {
       await _manager.addKey(providerId, key);
-      final models = _manager.getModels(providerId);
-      if (models.isNotEmpty) {
-        _updateState(successMessage: 'Key added and ${models.length} models discovered');
-      } else {
-        _updateState(errorMessage: 'Key added, but no models found. Check your key.');
-      }
+      _updateState(successMessage: 'Key added and models refreshed');
     } catch (e) {
       _updateState(errorMessage: 'Error adding key: $e');
     }
@@ -88,6 +83,11 @@ class AIConfigCubit extends Cubit<AIConfigState> {
   Future<void> removeKey(String providerId, String key) async {
     await _manager.removeKey(providerId, key);
     _updateState(successMessage: 'Key removed');
+  }
+
+  Future<void> reorderKeys(String providerId, int oldIndex, int newIndex) async {
+    await _manager.reorderKeys(providerId, oldIndex, newIndex);
+    _updateState();
   }
 
   Future<void> reportExhausted() async {
@@ -99,15 +99,29 @@ class AIConfigCubit extends Cubit<AIConfigState> {
     emit(state.copyWith(status: AIConfigStatus.discoveryInProgress));
     try {
       await _manager.refreshModels(providerId);
-      final models = _manager.getModels(providerId);
-      if (models.isNotEmpty) {
-        _updateState(successMessage: 'Sync completed: ${models.length} models');
-      } else {
-        _updateState(errorMessage: 'Sync finished with no new models');
-      }
+      _updateState(successMessage: 'Sync completed');
     } catch (e) {
       _updateState(errorMessage: 'Sync error: $e');
     }
+  }
+
+  // Custom Provider CRUD
+  Future<void> addCustomProvider(CustomProvider provider) async {
+    await _manager.addCustomProvider(provider);
+    final providers = await _manager.getAllProviders();
+    _updateState(providers: providers, successMessage: 'Custom provider added');
+  }
+
+  Future<void> updateCustomProvider(CustomProvider provider) async {
+    await _manager.updateCustomProvider(provider);
+    final providers = await _manager.getAllProviders();
+    _updateState(providers: providers, successMessage: 'Custom provider updated');
+  }
+
+  Future<void> removeCustomProvider(String providerId) async {
+    await _manager.removeCustomProvider(providerId);
+    final providers = await _manager.getAllProviders();
+    _updateState(providers: providers, successMessage: 'Custom provider removed');
   }
 
   void updateSearchQuery(String query) {

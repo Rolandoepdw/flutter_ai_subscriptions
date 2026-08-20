@@ -2,11 +2,13 @@ import 'package:equatable/equatable.dart';
 import '../data/provider_definitions.dart';
 import '../models/ai_model.dart';
 import '../models/api_key_pool.dart';
+import '../models/custom_provider.dart';
 
 enum AIConfigStatus { initial, loading, discoveryInProgress, ready, error }
 
 class AIConfigState extends Equatable {
   final List<ProviderDefinition> providers;
+  final List<CustomProvider> customProviders;
   final String? selectedProviderId;
   final Map<String, String> selectedModelIds;
   final Map<String, List<AIModel>> providerModels;
@@ -21,6 +23,7 @@ class AIConfigState extends Equatable {
 
   const AIConfigState({
     this.providers = const [],
+    this.customProviders = const [],
     this.selectedProviderId,
     this.selectedModelIds = const {},
     this.providerModels = const {},
@@ -37,12 +40,10 @@ class AIConfigState extends Equatable {
     return _applyFilters(allModels);
   }
 
-  /// Returns a map of Provider Name to its filtered models, only for providers with keys.
   Map<String, List<AIModel>> getGlobalFilteredModels() {
     final Map<String, List<AIModel>> globalModels = {};
     
     for (final provider in providers) {
-      // Only show providers that have at least one key configured
       final pool = keyPools[provider.id];
       if (pool == null || pool.keys.isEmpty) continue;
 
@@ -68,6 +69,7 @@ class AIConfigState extends Equatable {
 
   AIConfigState copyWith({
     List<ProviderDefinition>? providers,
+    List<CustomProvider>? customProviders,
     String? selectedProviderId,
     Map<String, String>? selectedModelIds,
     Map<String, List<AIModel>>? providerModels,
@@ -80,6 +82,7 @@ class AIConfigState extends Equatable {
   }) {
     return AIConfigState(
       providers: providers ?? this.providers,
+      customProviders: customProviders ?? this.customProviders,
       selectedProviderId: selectedProviderId ?? this.selectedProviderId,
       selectedModelIds: selectedModelIds ?? this.selectedModelIds,
       providerModels: providerModels ?? this.providerModels,
@@ -95,6 +98,7 @@ class AIConfigState extends Equatable {
   @override
   List<Object?> get props => [
         providers,
+        customProviders,
         selectedProviderId,
         selectedModelIds,
         providerModels,

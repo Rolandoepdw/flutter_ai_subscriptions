@@ -1,7 +1,9 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_ai_subscriptions/features/ai_config/cubit/ai_config_cubit.dart';
 import 'package:flutter_ai_subscriptions/features/ai_config/cubit/ai_config_state.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/custom_provider.dart';
 import 'package:flutter_ai_subscriptions/features/ai_config/ui/widgets/model_selection_tile.dart';
 
 class ProviderDetailScreen extends StatefulWidget {
@@ -55,6 +57,9 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
         final pool = state.keyPools[widget.providerId];
         final filteredModels = state.getFilteredModels(widget.providerId);
         final isDiscovering = state.status == AIConfigStatus.discoveryInProgress;
+        
+        final isCustom = widget.providerId.startsWith('custom_');
+        final customProvider = isCustom ? state.customProviders.firstWhere((p) => p.id == widget.providerId) : null;
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -66,6 +71,12 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
             iconTheme: const IconThemeData(color: Colors.black),
             title: Text(provider.name),
             actions: [
+              if (isCustom)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  onPressed: () => _showEditCustomProviderDialog(context, customProvider!),
+                  tooltip: 'Edit Provider',
+                ),
               if (isDiscovering)
                 const Center(
                   child: Padding(
@@ -88,152 +99,190 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
               child: Divider(height: 1, color: Colors.grey[200]),
             ),
           ),
-          body: Column(
-            children: [
-              // Key Pool Section (Top anchored)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'API KEY POOL',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2),
-                        ),
-                        InkWell(
-                          onTap: isDiscovering ? null : () => _showAddKeyDialog(context, widget.providerId),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.add_circle_outline, size: 14, color: Colors.blue),
-                              SizedBox(width: 4),
-                              Text('Add Key', style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)),
-                            ],
+          body: SafeArea(
+            top: false,
+            bottom: true,
+            child: Column(
+              children: [
+                // Key Pool Section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'API KEY POOL',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2),
+                          ),
+                          InkWell(
+                            onTap: isDiscovering ? null : () => _showAddKeyDialog(context, widget.providerId),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.add, size: 14, color: Colors.blue),
+                                SizedBox(width: 4),
+                                Text('Add Key', style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (pool == null || pool.keys.isEmpty)
+                        const Text('No keys configured.', style: TextStyle(color: Colors.grey, fontSize: 12))
+                      else
+                        SizedBox(
+                          height: 60,
+                          child: ReorderableListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            buildDefaultDragHandles: false,
+                            proxyDecorator: (child, index, animation) {
+                              return AnimatedBuilder(
+                                animation: animation,
+                                builder: (context, child) {
+                                  final double scale = lerpDouble(1, 1.05, animation.value)!;
+                                  final double elevation = lerpDouble(0, 1, animation.value)!;
+                                  return Transform.scale(
+                                    scale: scale,
+                                    child: Material(
+                                      shadowColor: Colors.transparent,
+                                      elevation: elevation,
+                                      color: Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: child,
+                              );
+                            },
+                            onReorder: (oldIndex, newIndex) => context.read<AIConfigCubit>().reorderKeys(widget.providerId, oldIndex, newIndex),
+                            itemCount: pool.keys.length,
+                            itemBuilder: (context, poolIndex) {
+                              final key = pool.keys[poolIndex];
+                              final isActive = pool.activeIndex == poolIndex;
+  
+                              return ReorderableDelayedDragStartListener(
+                                key: ValueKey(key.value),
+                                index: poolIndex,
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 12, bottom: 4, top: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isActive ? Colors.blue : Colors.grey[300]!, 
+                                      width: isActive ? 1.5 : 1.0,
+                                    ),
+                                    boxShadow: [
+                                      if (isActive) BoxShadow(color: Colors.blue.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))
+                                      else BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 1))
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        key.isExhausted ? Icons.error_outline : Icons.vpn_key_outlined,
+                                        color: key.isExhausted ? Colors.red : (isActive ? Colors.blue : Colors.grey),
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '••••${key.value.substring(key.value.length > 4 ? key.value.length - 4 : 0)}',
+                                        style: TextStyle(
+                                          fontSize: 12, 
+                                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                          color: isActive ? Colors.blue.shade900 : Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () => context.read<AIConfigCubit>().removeKey(widget.providerId, key.value),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[100],
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close, size: 12, color: Colors.grey),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (pool == null || pool.keys.isEmpty)
-                      const Text('No keys configured.', style: TextStyle(color: Colors.grey, fontSize: 12))
-                    else
-                      SizedBox(
-                        height: 48,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: pool.keys.length,
-                          itemBuilder: (context, poolIndex) {
-                            final key = pool.keys[poolIndex];
-                            final isActive = pool.activeIndex == poolIndex;
-
-                            return Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: isActive ? Colors.blue : Colors.grey[300]!),
-                                boxShadow: [
-                                  if (isActive) BoxShadow(color: Colors.blue.withValues(alpha: 0.05), blurRadius: 4)
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    key.isExhausted ? Icons.error_outline : Icons.vpn_key_outlined,
-                                    color: key.isExhausted ? Colors.red : (isActive ? Colors.blue : Colors.grey),
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '••••${key.value.substring(key.value.length > 4 ? key.value.length - 4 : 0)}',
-                                    style: TextStyle(
-                                      fontSize: 12, 
-                                      fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                                      color: isActive ? Colors.blue.shade900 : Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    icon: const Icon(Icons.close, size: 14, color: Colors.redAccent),
-                                    onPressed: () => context.read<AIConfigCubit>().removeKey(widget.providerId, key.value),
-                                  ),
-                                ],
-                              ),
+                    ],
+                  ),
+                ),
+  
+                // Search models and Filter
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: false,
+                            textAlignVertical: TextAlignVertical.center,
+                            style: const TextStyle(fontSize: 14),
+                            decoration: const InputDecoration(
+                              hintText: 'Search models...',
+                              prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            onChanged: (val) => context.read<AIConfigCubit>().updateSearchQuery(val),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _CustomFilterButton(
+                        label: 'Free',
+                        isSelected: state.onlyFree,
+                        onTap: () => context.read<AIConfigCubit>().toggleOnlyFree(!state.onlyFree),
+                      ),
+                    ],
+                  ),
+                ),
+  
+                Expanded(
+                  child: filteredModels.isEmpty
+                      ? Center(child: Text(isDiscovering ? 'Discovering models...' : 'No models found', style: const TextStyle(color: Colors.grey)))
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                          itemCount: filteredModels.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final model = filteredModels[index];
+                            return ModelSelectionTile(
+                              model: model,
+                              isSelected: model.id == selectedModelId,
+                              onTap: () => context.read<AIConfigCubit>().selectModel(widget.providerId, model.id),
                             );
                           },
                         ),
-                      ),
-                  ],
                 ),
-              ),
-
-              // Search models and Filter
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 40,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: TextField(
-                          controller: _searchController,
-                          textAlignVertical: TextAlignVertical.center,
-                          style: const TextStyle(fontSize: 14),
-                          decoration: const InputDecoration(
-                            hintText: 'Search models...',
-                            prefixIcon: Icon(Icons.search, size: 18),
-                            border: InputBorder.none,
-                            isCollapsed: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onChanged: (val) => context.read<AIConfigCubit>().updateSearchQuery(val),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _CustomFilterButton(
-                      label: 'Free',
-                      isSelected: state.onlyFree,
-                      onTap: () => context.read<AIConfigCubit>().toggleOnlyFree(!state.onlyFree),
-                    ),
-                  ],
-                ),
-              ),
-
-              Expanded(
-                child: filteredModels.isEmpty
-                    ? Center(child: Text(isDiscovering ? 'Discovering models...' : 'No models found', style: const TextStyle(color: Colors.grey)))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: filteredModels.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final model = filteredModels[index];
-                          return ModelSelectionTile(
-                            model: model,
-                            isSelected: model.id == selectedModelId,
-                            onTap: () => context.read<AIConfigCubit>().selectModel(widget.providerId, model.id),
-                          );
-                        },
-                      ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -242,41 +291,80 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
 
   void _showAddKeyDialog(BuildContext context, String providerId) {
     final controller = TextEditingController();
+    _showStyledDialog(
+      context: context,
+      title: 'Add API Key',
+      content: [
+        _buildField('API Key', controller, autofocus: true, hint: 'Paste your key here'),
+      ],
+      onConfirm: () {
+        if (controller.text.isNotEmpty) {
+          context.read<AIConfigCubit>().addKey(providerId, controller.text);
+          Navigator.pop(context);
+        }
+      },
+      confirmLabel: 'Add Key',
+    );
+  }
+
+  void _showEditCustomProviderDialog(BuildContext context, CustomProvider provider) {
+    final nameController = TextEditingController(text: provider.name);
+    final urlController = TextEditingController(text: provider.baseUrl);
+    
+    _showStyledDialog(
+      context: context,
+      title: 'Edit Custom Provider',
+      content: [
+        _buildField('Name', nameController),
+        const SizedBox(height: 12),
+        _buildField('Base URL', urlController),
+      ],
+      onConfirm: () {
+        if (nameController.text.isNotEmpty && urlController.text.isNotEmpty) {
+          final updated = CustomProvider(
+            id: provider.id,
+            name: nameController.text,
+            baseUrl: urlController.text,
+          );
+          context.read<AIConfigCubit>().updateCustomProvider(updated);
+          Navigator.pop(context);
+        }
+      },
+      confirmLabel: 'Save Changes',
+    );
+  }
+
+  void _showStyledDialog({
+    required BuildContext context,
+    required String title,
+    required List<Widget> content,
+    required VoidCallback onConfirm,
+    required String confirmLabel,
+  }) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          padding: const EdgeInsets.all(20),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Add API Key', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Paste your key here',
-                    hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              ...content,
+              const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
+                    style: TextButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                    child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
@@ -284,15 +372,11 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
                       backgroundColor: Colors.blue[600],
                       foregroundColor: Colors.white,
                       elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    onPressed: () {
-                      if (controller.text.isNotEmpty) {
-                        context.read<AIConfigCubit>().addKey(providerId, controller.text);
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: const Text('Add Key'),
+                    onPressed: onConfirm,
+                    child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -300,6 +384,35 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildField(String label, TextEditingController controller, {bool autofocus = false, String? hint}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: TextField(
+            controller: controller,
+            autofocus: autofocus,
+            style: const TextStyle(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+              border: InputBorder.none,
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

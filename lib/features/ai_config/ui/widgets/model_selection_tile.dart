@@ -24,8 +24,8 @@ class ModelSelectionTile extends StatelessWidget {
                 : '${model.contextTokens}'))
         : '---';
 
-    final inputPrice = model.inputPrice != null ? '\$${model.inputPrice!.toStringAsFixed(2)}' : '0.00';
-    final outputPrice = model.outputPrice != null ? '\$${model.outputPrice!.toStringAsFixed(2)}' : '0.00';
+    final inputPrice = model.inputPrice != null ? '\$${model.inputPrice!.toStringAsFixed(2)}' : '---';
+    final outputPrice = model.outputPrice != null ? '\$${model.outputPrice!.toStringAsFixed(2)}' : '---';
     final costStr = model.tier == AITier.free ? 'Free' : 'In: $inputPrice | Out: $outputPrice / 1M';
 
     return InkWell(
@@ -39,20 +39,13 @@ class ModelSelectionTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    model.name, 
-                    style: TextStyle(
-                      fontSize: 14, 
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? Colors.blue.shade800 : Colors.black87,
-                    )
-                  ),
-                ),
-                if (isSelected) const Icon(Icons.check_circle, size: 14, color: Colors.blue),
-              ],
+            Text(
+              model.name,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? Colors.blue.shade800 : Colors.black87,
+              )
             ),
             const SizedBox(height: 2),
             Row(

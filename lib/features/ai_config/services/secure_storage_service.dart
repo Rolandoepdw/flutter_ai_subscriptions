@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/custom_provider.dart';
 import '../models/ai_model.dart';
 import '../models/api_key_pool.dart';
 
@@ -11,6 +12,24 @@ class SecureStorageService {
   static const String _selectedModelPrefix = 'active_model_';
 
   static const String _modelsPrefix = 'ai_models_';
+
+  static const String _customProvidersKey = 'custom_providers_list';
+
+  Future<void> saveCustomProviders(List<CustomProvider> providers) async {
+    final jsonList = providers.map((p) => p.toJson()).toList();
+    await _storage.write(key: _customProvidersKey, value: jsonEncode(jsonList));
+  }
+
+  Future<List<CustomProvider>> loadCustomProviders() async {
+    final jsonString = await _storage.read(key: _customProvidersKey);
+    if (jsonString == null) return [];
+    try {
+      final List jsonList = jsonDecode(jsonString);
+      return jsonList.map((p) => CustomProvider.fromJson(p)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
 
   Future<void> saveModels(String providerId, List<AIModel> models) async {
     final List<Map<String, dynamic>> jsonList = models.map((m) => m.toJson()).toList();

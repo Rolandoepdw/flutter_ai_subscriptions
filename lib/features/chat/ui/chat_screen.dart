@@ -45,7 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
           backgroundColor: Colors.white,
           centerTitle: true,
           title: const Text(
-            'AI Assistant', 
+            'AI Assistant',
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)
           ),
           bottom: PreferredSize(
@@ -71,7 +71,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           Icon(Icons.auto_awesome, size: 48, color: Colors.blue[200]),
                           const SizedBox(height: 16),
                           Text(
-                            'How can I help you today?', 
+                            'How can I help you today?',
                             style: TextStyle(color: Colors.grey[400], fontSize: 16)
                           ),
                         ],
@@ -237,7 +237,7 @@ class _AdvancedInputPanel extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(28),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -365,7 +365,7 @@ class _AdvancedModelSelectorDialogState extends State<_AdvancedModelSelectorDial
         final groupedModels = state.getGlobalFilteredModels();
 
         return Align(
-          alignment: Alignment.bottomCenter,
+          alignment: Alignment.center,
           child: Container(
             margin: const EdgeInsets.all(16),
             width: double.infinity,
@@ -376,23 +376,40 @@ class _AdvancedModelSelectorDialogState extends State<_AdvancedModelSelectorDial
             ),
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               child: Column(
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                    child: TextField(
-                      controller: _searchController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: 'Search models...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        isDense: true,
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                      ),
-                      onChanged: (val) => context.read<AIConfigCubit>().updateSearchQuery(val),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+                            child: TextField(
+                              controller: _searchController,
+                              autofocus: false, // Quitado el autofoco
+                              textAlignVertical: TextAlignVertical.center,
+                              decoration: const InputDecoration(
+                                hintText: 'Search models...',
+                                prefixIcon: Icon(Icons.search, size: 20),
+                                isCollapsed: true,
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: (val) => context.read<AIConfigCubit>().updateSearchQuery(val),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _CustomFilterButton(
+                          label: 'Free',
+                          isSelected: state.onlyFree,
+                          onTap: () => context.read<AIConfigCubit>().toggleOnlyFree(!state.onlyFree),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
@@ -468,6 +485,34 @@ class _LargeCapabilityIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Icon(icon, size: 14, color: Colors.blue),
+    );
+  }
+}
+
+class _CustomFilterButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CustomFilterButton({required this.label, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[600] : Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.grey[600]),
+        ),
+      ),
     );
   }
 }

@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
-import '../../ai_config/models/ai_active_credentials.dart';
-import '../../ai_config/services/ai_config_manager.dart';
-import '../models/chat_message.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/models/ai_active_credentials.dart';
+import 'package:flutter_ai_subscriptions/features/ai_config/services/ai_config_manager.dart';
+import 'package:flutter_ai_subscriptions/features/chat/models/chat_message.dart';
 
 class ChatService {
   final AIConfigManager _configManager;
@@ -20,7 +20,6 @@ class ChatService {
     } catch (e) {
       developer.log('Chat request failed: $e', name: 'ChatService');
       
-      // If it's a quota or auth error, rotate and retry once
       if (e.toString().contains('429') || e.toString().contains('401')) {
         developer.log('Detected quota/auth error. Rotating key and retrying...', name: 'ChatService');
         await _configManager.reportKeyExhausted();
@@ -37,7 +36,6 @@ class ChatService {
     if (credentials.providerId == 'google') {
       return await _sendToGoogle(credentials, history);
     } else {
-      // Standard OpenAI format for OpenRouter, Anthropic, DeepSeek, etc.
       return await _sendToOpenAICompatible(credentials, history);
     }
   }
@@ -60,18 +58,32 @@ class ChatService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data['candidates'][0]['content']['parts'][0]['text'];
+      try {
+        return data['candidates'][0]['content']['parts'][0]['text'];
+      } catch (e) {
+        throw Exception('Unexpected Google API response format: ${response.body}');
+      }
     } else {
       throw Exception('Google API Error (${response.statusCode}): ${response.body}');
     }
   }
 
   Future<String> _sendToOpenAICompatible(AIActiveCredentials creds, List<ChatMessage> history) async {
-    // Determine Base URL based on provider (this could be improved by adding endpoints to ProviderDefinition)
-    String url = 'https://openrouter.ai/api/v1/chat/completions';
-    if (creds.providerId == 'anthropic') url = 'https://api.anthropic.com/v1/messages';
-    if (creds.providerId == 'deepseek') url = 'https://api.deepseek.com/v1/chat/completions';
-    if (creds.providerId == 'xai') url = 'https://api.x.ai/v1/chat/completions';
+    final allProviders = await _configManager.getAllProviders();
+    final definition = allProviders.firstWhere((p) => p.id == creds.providerId);
+    
+    // LM Studio often uses base URL as http://localhost:1234/v1
+    // If the URL already ends with /v1, we don't duplicate it.
+    String baseUrl = definition.baseUrl;
+    if (!baseUrl.endsWith('/v1') && !baseUrl.contains('/v1/')) {
+      // If it doesn't have /v1, we usually need to add it for the OpenAI spec.
+      // But we must check if /chat/completions is already there.
+      if (!baseUrl.endsWith('/')) baseUrl += '/';
+      baseUrl += 'v1';
+    }
+
+    final url = baseUrl.endsWith('/') ? '${baseUrl}chat/completions' : '$baseUrl/chat/completions';
+    developer.log('Sending request to: $url', name: 'ChatService');
 
     final messages = history.where((m) => !m.isSystemLog).map((m) {
       return {
@@ -96,7 +108,16 @@ class ChatService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data['choices'][0]['message']['content'];
+      try {
+        // Safe access to avoid NoSuchMethodError
+        final choices = data['choices'] as List?;
+        if (choices != null && choices.isNotEmpty) {
+          return choices[0]['message']['content'] ?? '';
+        }
+        throw Exception('Empty choices in response');
+      } catch (e) {
+        throw Exception('Error parsing OpenAI response: $e. Body: ${response.body}');
+      }
     } else {
       throw Exception('${creds.providerId} API Error (${response.statusCode}): ${response.body}');
     }

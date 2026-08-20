@@ -35,6 +35,14 @@ class ProviderDefinitions {
       requiresKeyForDiscovery: false,
     ),
     ProviderDefinition(
+      id: 'openai',
+      name: 'OpenAI',
+      baseUrl: 'https://api.openai.com',
+      discoveryEndpoint: '/v1/models',
+      iconPath: 'assets/icons/openai.png',
+      requiresKeyForDiscovery: true,
+    ),
+    ProviderDefinition(
       id: 'anthropic',
       name: 'Anthropic',
       baseUrl: 'https://api.anthropic.com',
@@ -52,18 +60,10 @@ class ProviderDefinitions {
     ),
     ProviderDefinition(
       id: 'xai',
-      name: 'X.ai (Elon Musk)',
+      name: 'X.ai',
       baseUrl: 'https://api.x.ai',
       discoveryEndpoint: '/v1/models',
       iconPath: 'assets/icons/xai.png',
-      requiresKeyForDiscovery: true,
-    ),
-    ProviderDefinition(
-      id: 'microsoft',
-      name: 'Microsoft (Azure OpenAI)',
-      baseUrl: '', // Varies by deployment
-      discoveryEndpoint: '', 
-      iconPath: 'assets/icons/microsoft.png',
       requiresKeyForDiscovery: true,
     ),
   ];
