@@ -2,56 +2,53 @@
 
 ## Overview
 
-The module follows a clean architecture approach adapted for Flutter, using **Cubit** for state management and **GetIt** for service injection. It is designed to be self-contained and reusable.
+The module follows a clean architecture approach, designed as a standalone Flutter package. It uses **ChangeNotifier** for state management to maintain zero dependencies on external state libraries like BloC, ensuring maximum compatibility.
 
 ## Component Diagram
 
 ```mermaid
 graph TD
-    UI[UI Screens/Widgets] --> Cubit[AIConfigCubit]
-    Cubit --> Manager[AIConfigManager]
+    UI[UI Screens/Widgets] --> Notifier[AIConfigNotifier]
+    Notifier --> Manager[AIConfigManager]
     Manager --> Storage[SecureStorageService]
+    Manager --> Discovery[DiscoveryService]
+    Manager --> Factory[AIRequestFactory]
     Consumer[API Consumer Layer] --> Manager
     Storage --> FSS[flutter_secure_storage]
 ```
 
 ## Key Components
 
-### 1. AIConfigCubit (State Management)
-- Manages the UI state, including the list of providers, selected model, and the status of the API key pools.
-- Emits states such as `AIConfigLoading`, `AIConfigReady`, and `AIConfigNoKeysAvailable`.
-- Reacts to user interactions (selecting a provider, adding a key).
+### 1. AIConfigManager (Core Business Logic)
+- Orchestrates key rotation and automatic cool-down.
+- Manages selected providers and models.
+- Interacts with `DiscoveryService` for dynamic model fetching.
+- Persists state using `SecureStorageService`.
 
-### 2. AIConfigManager (Business Logic)
-- Registered as a Singleton via **GetIt**.
-- Orchestrates the logic for key rotation (`reportKeyExhausted`).
-- Provides the currently active credentials to the rest of the application.
-- Interfaces with the persistence layer to load and save configurations.
+### 2. AIConfigNotifier (State Management)
+- Wraps the `AIConfigManager` to provide a Flutter-friendly `ChangeNotifier`.
+- Handles UI-specific logic like search filtering and success/error messaging.
+- Notifies listeners when the configuration changes.
 
-### 3. SecureStorageService (Persistence)
-- Encapsulates `flutter_secure_storage`.
-- Handles sensitive data (API keys) with platform-specific security (Android Keystore, Windows DPAPI).
-- Manages the serialization/deserialization of the key pools.
+### 3. AIRequestFactory (Abstraction Layer)
+- Generates precise request details (URL, Headers, Body) for different providers.
+- Supports OpenAI, Google AI, and Anthropic formats.
+- Decoupled from the HTTP client, allowing users to use `http`, `dio`, or any other library.
+
+### 4. SecureStorageService (Persistence)
+- Encapsulates `flutter_secure_storage` for sensitive API keys.
+- Handles cross-platform security (Android Keystore, Windows DPAPI).
 
 ## Data Flow
 
-### Initialization
-1. `GetIt` registers `AIConfigManager` and `SecureStorageService`.
-2. `AIConfigManager.init()` is called on app startup.
-3. Saved keys and selected models are loaded from `flutter_secure_storage`.
-4. `AIConfigCubit` initializes with the loaded data.
-
-### Key Exhaustion Flow
-1. The **API Consumer Layer** (e.g., a Chat Service) makes a request and receives a "Rate Limit" or "Quota Exceeded" error.
-2. The Consumer calls `AIConfigManager.reportKeyExhausted()`.
-3. `AIConfigManager` updates the pool:
-    - Marks the current key as exhausted.
-    - Moves the pointer to the next available key.
-    - If no keys remain, notifies `AIConfigCubit`.
-4. `AIConfigCubit` emits a state that triggers a UI warning/dialog.
+### Key Exhaustion & Cool-down
+1. The consumer reports an error via `manager.reportKeyExhausted()`.
+2. The Manager marks the current key as exhausted with a timestamp.
+3. The Manager rotates to the next available key in the pool.
+4. If the consumer requests credentials later, the Manager checks if enough time has passed (default 8h) to reactivate the exhausted keys automatically.
 
 ## Platform Considerations
 
-- **Android**: Uses standard encrypted SharedPreferences via `flutter_secure_storage`.
-- **Windows**: `flutter_secure_storage` uses DPAPI. Requires minimal setup in `main.dart` to ensure the storage is initialized correctly.
-- **Dart Pure Logic**: All business logic (rotation, model filtering) is written in pure Dart to ensure 100% compatibility across platforms.
+- **Android**: Uses encrypted SharedPreferences.
+- **Windows**: Uses DPAPI for secure storage.
+- **Pure Dart Core**: All rotation and request generation logic is pure Dart.

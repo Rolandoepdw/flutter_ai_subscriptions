@@ -1,70 +1,70 @@
-# API Specification: AI Key and Model Management Module
+# API Specification: Flutter AI Subscriptions
 
-## AIConfigManager (Singleton Service)
+## AIConfigManager
 
-This service is accessed via `GetIt.I<AIConfigManager>()`.
+The main engine of the package.
 
 ### Methods
 
 #### `Future<void> init()`
-Loads the configuration and keys from secure storage. Should be called at app startup.
+Loads the configuration and keys from secure storage.
 
 #### `AIActiveCredentials? getActiveCredentials()`
-Returns the `apiKey`, `providerId`, and `modelId` for the current selection. Returns `null` if no key is available for the selected provider.
+Returns the active `apiKey`, `providerId`, and `modelId`. Automatically triggers cool-down checks for exhausted keys.
 
 #### `Future<void> reportKeyExhausted()`
-Marks the current key as exhausted and rotates to the next available one in the pool. Updates the `AIConfigCubit` state.
+Marks the current key as exhausted and rotates to the next one.
 
 #### `Future<void> addKey(String providerId, String key)`
-Adds a new key to the pool of the specified provider. Persists the change.
+Validates the key with the provider before adding it to the pool.
 
-#### `Future<void> removeKey(String providerId, String key)`
-Removes a specific key from the pool.
-
-#### `Future<void> selectProvider(String providerId)`
-Sets the active provider.
-
-#### `Future<void> selectModel(String modelId)`
-Sets the active model for the current provider.
+#### `Future<void> selectModel(String providerId, String modelId)`
+Selects the model and sets the provider as the globally active one.
 
 ---
 
-## AIConfigCubit (State Management)
+## AIRequestFactory
 
-### States
+Generates request configurations.
 
-- `AIConfigInitial`: Initial state before loading.
-- `AIConfigLoading`: State while reading from secure storage.
-- `AIConfigReady`: Configuration loaded, UI ready to interact. Contains current `AIConfigState`.
-- `AIConfigError`: Something went wrong during initialization or persistence.
-
-### Notifications/Side Effects
-- **NoKeysAvailableEvent**: Broadcasted when `reportKeyExhausted` is called but the pool is empty. The UI should react by showing a "Top up keys" prompt.
+### `static AIRequestDetails generateChatRequest(...)`
+Returns an `AIRequestDetails` object containing:
+- `url`: Formatted endpoint (with keys if required by Google).
+- `headers`: Map including `Authorization` or custom headers.
+- `body`: JSON body formatted according to provider requirements.
 
 ---
 
-## Integration Example (Consumer Layer)
+## AIConfigNotifier
+
+Utility class for UI binding.
+
+### Properties
+- `status`: Current state (`initial`, `loading`, `ready`, etc.).
+- `providers`: List of built-in and custom providers.
+- `selectedProviderId`: Currently active provider.
+
+---
+
+## Integration Example
 
 ```dart
-void sendMessage(String text) async {
-  final credentials = GetIt.I<AIConfigManager>().getActiveCredentials();
-  
-  if (credentials == null) {
-    // Show UI to add keys
-    return;
-  }
+final manager = AIConfigManager(storage: myStorage, discovery: myDiscovery);
+await manager.init();
 
-  try {
-    final response = await aiClient.call(
-      model: credentials.modelId,
-      apiKey: credentials.apiKey,
-      prompt: text,
-    );
-  } catch (e) {
-    if (e.isQuotaExceeded) {
-      GetIt.I<AIConfigManager>().reportKeyExhausted();
-      // Retry or notify user
-    }
-  }
+final credentials = manager.getActiveCredentials();
+
+if (credentials != null) {
+  final details = AIRequestFactory.generateChatRequest(
+    credentials: credentials,
+    allProviders: manager.getAllProviders(),
+    messages: [{'role': 'user', 'content': 'Hello!'}],
+  );
+  
+  final response = await http.post(
+    Uri.parse(details.url),
+    headers: details.headers,
+    body: jsonEncode(details.body),
+  );
 }
 ```
